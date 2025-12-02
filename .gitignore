@@ -1,0 +1,39 @@
+# EiffelStudio generated files
+EIFGENs/
+
+# Backup files
+*.bak
+*~
+
+# IDE settings
+.settings/
+*.epr
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Debug files
+*.pdb
+*.ilk
+
+# Log files
+*.log
+
+# Documentation generated files
+doc/
+
+# Test results
+test_results/
