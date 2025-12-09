@@ -23,6 +23,7 @@
 			</condition>
 		</external_object>
 		<library name="base" location="$ISE_LIBRARY\library\base\base.ecf"/>
+		<library name="simple_datetime" location="$SIMPLE_DATETIME\simple_datetime.ecf"/>
 		<cluster name="src" location=".\src\" recursive="true"/>
 	</target>
 	<target name="simple_process_tests" extends="simple_process">

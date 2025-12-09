@@ -29,6 +29,15 @@ feature {NONE} -- Initialization
 			run_test (agent test_simple_process_direct, "test_simple_process_direct")
 			run_test (agent test_file_exists_in_path, "test_file_exists_in_path")
 
+			-- Async process tests
+			run_test (agent test_async_start_and_wait, "test_async_start_and_wait")
+			run_test (agent test_async_read_output, "test_async_read_output")
+			run_test (agent test_async_pid, "test_async_pid")
+			run_test (agent test_async_timeout, "test_async_timeout")
+			run_test (agent test_async_kill, "test_async_kill")
+			run_test (agent test_async_elapsed_time, "test_async_elapsed_time")
+			run_test (agent test_async_show_window_setting, "test_async_show_window_setting")
+
 			print ("%N============================%N")
 			print ("Results: " + passed_count.out + " passed, " + failed_count.out + " failed%N")
 			if failed_count = 0 then
@@ -140,6 +149,137 @@ feature -- Tests
 			create l_process.make
 			check_true ("notepad exists", l_process.file_exists_in_path ("notepad.exe"))
 			check_true ("fake not exists", not l_process.file_exists_in_path ("fake_program_xyz.exe"))
+		end
+
+feature -- Async Tests
+
+	test_async_start_and_wait
+			-- Test starting async process and waiting for completion.
+		local
+			async: SIMPLE_ASYNC_PROCESS
+		do
+			create async.make
+			async.start ("cmd /c echo Hello Async")
+			check_true ("started", async.is_started)
+			check_true ("was started ok", async.was_started_successfully)
+
+			-- Wait up to 5 seconds
+			check_true ("finished", async.wait_seconds (5))
+			check_true ("not running", not async.is_running)
+			check_true ("exit code 0", async.exit_code = 0)
+
+			async.close
+		end
+
+	test_async_read_output
+			-- Test reading output from async process.
+		local
+			async: SIMPLE_ASYNC_PROCESS
+		do
+			create async.make
+			async.start ("cmd /c echo Test Output")
+
+			-- Wait for completion
+			async.wait_seconds (5).do_nothing
+
+			-- Read output
+			if attached async.read_available_output then end
+			check_true ("has accumulated output", not async.accumulated_output.is_empty)
+			check_true ("contains test", async.accumulated_output.has_substring ("Test"))
+
+			async.close
+		end
+
+	test_async_pid
+			-- Test getting process ID.
+		local
+			async: SIMPLE_ASYNC_PROCESS
+		do
+			create async.make
+			-- Use a slightly longer command so we can check PID
+			async.start ("cmd /c ping localhost -n 1")
+
+			if async.was_started_successfully then
+				check_true ("has pid", async.process_id > 0)
+			end
+
+			-- Wait for completion
+			async.wait_seconds (10).do_nothing
+			async.close
+		end
+
+	test_async_timeout
+			-- Test that timeout works (process that takes time).
+		local
+			async: SIMPLE_ASYNC_PROCESS
+			l_wait_result: INTEGER
+		do
+			create async.make
+			-- Start a command that takes a few seconds
+			async.start ("cmd /c ping localhost -n 3")
+
+			-- Wait only 100ms - should timeout
+			l_wait_result := async.wait (100)
+			check_true ("timeout occurred", l_wait_result = 0)
+
+			-- Now wait for real completion
+			async.wait_seconds (10).do_nothing
+			async.close
+		end
+
+	test_async_kill
+			-- Test killing a long-running process.
+		local
+			async: SIMPLE_ASYNC_PROCESS
+			killed: BOOLEAN
+		do
+			create async.make
+			-- Start a command that would take a long time
+			async.start ("cmd /c ping localhost -n 30")
+
+			if async.was_started_successfully and async.is_running then
+				-- Kill it
+				killed := async.kill
+				-- Note: kill may not be instant
+				async.wait (500).do_nothing -- Give it a moment
+				check_true ("killed or finished", killed or not async.is_running)
+			end
+
+			async.close
+		end
+
+	test_async_elapsed_time
+			-- Test elapsed time tracking.
+		local
+			async: SIMPLE_ASYNC_PROCESS
+			l_env: EXECUTION_ENVIRONMENT
+		do
+			create async.make
+			async.start ("cmd /c ping localhost -n 2")
+
+			-- Sleep a moment
+			create l_env
+			l_env.sleep (1_000_000_000) -- 1 second
+
+			if async.is_started then
+				check_true ("elapsed >= 0", async.elapsed_seconds >= 0)
+			end
+
+			async.wait_seconds (10).do_nothing
+			async.close
+		end
+
+	test_async_show_window_setting
+			-- Test show window setting.
+		local
+			async: SIMPLE_ASYNC_PROCESS
+		do
+			create async.make
+			check_true ("default hidden", not async.show_window)
+			async.set_show_window (True)
+			check_true ("can set visible", async.show_window)
+			async.set_show_window (False)
+			check_true ("can set hidden", not async.show_window)
 		end
 
 feature {NONE} -- Test Infrastructure
