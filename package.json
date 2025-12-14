@@ -1,0 +1,9 @@
+{
+  "name": "simple_process",
+  "version": "0.1.0",
+  "description": "Simple Process Library - SCOOP-compatible process execution using Win32 API",
+  "author": "Larry Rix",
+  "license": "MIT",
+  "category": "platform",
+  "keywords": ["process", "spawn", "execute", "shell"]
+}
