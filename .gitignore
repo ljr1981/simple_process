@@ -24,3 +24,5 @@ Documentation/
 .DS_Store
 Thumbs.db
 
+*.obj
+*.o
