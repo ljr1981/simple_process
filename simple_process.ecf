@@ -40,6 +40,27 @@
 		<setting name="console_application" value="true"/>
 		<library name="simple_testing" location="$SIMPLE_EIFFEL/simple_testing/simple_testing.ecf"/>
 		<library name="testing" location="$ISE_LIBRARY\library\testing\testing.ecf"/>
-		<cluster name="tests" location=".\testing\" recursive="true"/>
+		<cluster name="tests" location=".\testing\" recursive="true">
+			<file_rule>
+				<exclude>/scoop$</exclude>
+			</file_rule>
+		</cluster>
+	</target>
+	<!-- The freeze assault (1.0.1). Every external in this library that waits on a
+	     child process is a WAIT, and an unmarked wait stops ISE's collector - and with
+	     it every other processor - for as long as it lasts. Proving that needs a second
+	     processor allocating while the first is inside the library, so this target is
+	     SCOOP where the others are threads. The child is a real one; the only unmarked
+	     wait in the assault is the one BLOCKING_PROBE makes on purpose. -->
+	<target name="simple_process_scoop_tests" extends="simple_process">
+		<root class="SCOOP_TEST_APP" feature="make"/>
+		<option warning="warning">
+			<assertions precondition="true" postcondition="true" check="true" invariant="true" loop="true" supplier_precondition="true"/>
+		</option>
+		<setting name="console_application" value="true"/>
+		<capability>
+			<concurrency use="scoop"/>
+		</capability>
+		<cluster name="scoop_tests" location=".\testing\scoop\" recursive="true"/>
 	</target>
 </system>

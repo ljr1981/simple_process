@@ -19,8 +19,9 @@
 
 ## Status
 
-✅ **Production Ready** — v1.0.0
-- 9 tests passing
+✅ **Production Ready** — v1.0.1
+- 17 tests passing, plus a 5-test SCOOP freeze assault
+- **A running child never stops another processor's allocator** (see CHANGELOG 1.0.1)
 - SCOOP-compatible (no thread dependency)
 - Direct Win32 API wrapper
 - Full Design by Contract coverage
@@ -193,11 +194,26 @@ ec -config simple_process.ecf -target simple_process -c_compile
 ### Run Tests
 
 ```bash
-ec -config simple_process.ecf -target simple_process_tests -c_compile
-./EIFGENs/simple_process_tests/W_code/simple_process.exe
+/d/prod/ec.sh test -config simple_process.ecf -target simple_process_tests
+./EIFGENs/simple_process_tests/F_code/simple_process.exe
 ```
 
-**Test Results:** 9 tests passing
+**Test Results:** 17 tests passing
+
+### The freeze assault (SCOOP)
+
+```bash
+/d/prod/ec.sh test -config simple_process.ecf -target simple_process_scoop_tests
+./EIFGENs/simple_process_scoop_tests/F_code/simple_process.exe
+```
+
+Five tests on two processors. A real three-second child runs through
+`SIMPLE_PROCESS.execute` and through `SIMPLE_ASYNC_PROCESS.wait` on its own
+processor while the root does nothing but allocate against a growing live set;
+the root's worst single allocation must stay under 500 ms. Unmarked it was
+3,166 ms and 3,053 ms; marked it is 4 ms and 4 ms. Three companion probes hold
+the law itself - the same wait as an Eiffel sleep, as an unmarked C call, and
+as the same C call marked `blocking`.
 
 Tests cover:
 - Command execution
@@ -271,6 +287,8 @@ end
 SIMPLE_PROCESS is fully SCOOP-compatible. The C wrapper handles all Win32 API calls synchronously without threading dependencies, making it safe for use in concurrent Eiffel applications.
 
 This is a key improvement over the previous version which required thread concurrency mode due to its dependency on the EiffelStudio process library.
+
+**And a running child never freezes the others.** Every external here that waits - `c_sp_execute_command`, `c_sp_file_in_path`, `c_sp_start_async`, `c_sp_wait_timeout`, `c_sp_read_output` - is declared `external "C blocking inline ..."`. ISE's collector stops every thread of the system before it collects, and a thread inside an *unmarked* external cannot be seen or stopped, so the collection waits for it - and every other processor waits with it, at its very next allocation. `sp_execute_command` waits on the child with `INFINITE`, so before 1.0.1 a two-minute `claude -p` stopped the whole program for two minutes (simple_chat, 2026-09-02). Marked, the runtime knows the thread has left Eiffel and collects without it. The struct-field readers and the deallocators are left unmarked on purpose: none of them can wait on anything, and a marker costs a runtime transition on every call.
 
 ---
 
