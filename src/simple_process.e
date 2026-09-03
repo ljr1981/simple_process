@@ -2,6 +2,21 @@ note
 	description: "[
 		SCOOP-compatible process execution.
 		Uses direct Win32 API calls via C wrapper - no thread dependencies.
+
+		THE GUARANTEE (1.0.1). A child process running here never stops
+		another processor's allocator.
+
+		Every external of this class that waits is declared
+		`external "C blocking inline"': `c_sp_execute_command', which runs
+		a child to completion, and `c_sp_file_in_path', which walks PATH.
+		ISE's garbage collector stops every thread of the system before it
+		collects, and the marker is how a thread that is about to sit in
+		the kernel hands itself to the runtime first. Without it the
+		collection waits for the call to return, and every other processor
+		waits with it at its very next allocation - which is exactly what
+		froze simple_chat's window on 2026-09-02.
+
+		The assault that proves it lives in testing/scoop/.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -279,8 +294,18 @@ feature {NONE} -- C externals
 
 	c_sp_execute_command (a_command, a_working_dir: POINTER; a_show_window: INTEGER): POINTER
 			-- Execute command and return result pointer.
+			--
+			-- BLOCKING. This is the whole life of a child process: CreateProcess,
+			-- a full drain of its stdout pipe, and then WaitForSingleObject with
+			-- INFINITE. Unmarked, it held ISE's collector - and every other
+			-- processor's allocator - for as long as the child lived.
+			--
+			-- Safe to mark: both string arguments are C_STRING buffers, which
+			-- MANAGED_POINTER allocates with memory_calloc on the C heap, and the
+			-- result is a malloc'd sp_result read only after the call returns. The
+			-- C code touches no Eiffel-collected memory while it waits.
 		external
-			"C inline use %"simple_process.h%""
+			"C blocking inline use %"simple_process.h%""
 		alias
 			"return sp_execute_command((const char*)$a_command, (const char*)$a_working_dir, (int)$a_show_window);"
 		end
@@ -335,8 +360,15 @@ feature {NONE} -- C externals
 
 	c_sp_file_in_path (a_filename: POINTER): INTEGER
 			-- Check if file exists in PATH.
+			--
+			-- BLOCKING. SearchPathA walks the application directory, the system
+			-- and Windows directories and then every entry of PATH; one dead
+			-- network share on PATH costs seconds. On POSIX the same query runs
+			-- system ("command -v ..."), which forks a whole shell.
+			--
+			-- Safe to mark: the one argument is a C_STRING buffer on the C heap.
 		external
-			"C inline use %"simple_process.h%""
+			"C blocking inline use %"simple_process.h%""
 		alias
 			"return sp_file_in_path((const char*)$a_filename);"
 		end

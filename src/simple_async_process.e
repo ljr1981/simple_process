@@ -26,6 +26,15 @@ note
 			end
 			print (async.exit_code)
 			async.close
+
+		THE GUARANTEE (1.0.1). A child process monitored here never stops
+		another processor's allocator. `c_sp_start_async',
+		`c_sp_wait_timeout' and `c_sp_read_output' each sit in the kernel,
+		and each is declared `external "C blocking inline"' so ISE's
+		garbage collector can collect while they do. A bounded wait is
+		still a wait: unmarked, `wait (120_000)' cost every other
+		processor every millisecond the child actually took. See
+		testing/scoop/ for the assault that proves it.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -312,8 +321,17 @@ feature {NONE} -- C externals
 
 	c_sp_start_async (a_command, a_working_dir: POINTER; a_show_window: INTEGER): POINTER
 			-- Start async process and return handle.
+			--
+			-- BLOCKING. CreateProcess is not instant: the loader maps an image,
+			-- and an anti-virus filter driver can scan it first. Tens to hundreds
+			-- of milliseconds is normal, and every one of them was a millisecond
+			-- no other processor could allocate in.
+			--
+			-- Safe to mark: both string arguments are C_STRING buffers on the C
+			-- heap, and the result is a malloc'd sp_async_process read only after
+			-- the call returns.
 		external
-			"C inline use %"simple_process.h%""
+			"C blocking inline use %"simple_process.h%""
 		alias
 			"return sp_start_async((const char*)$a_command, (const char*)$a_working_dir, (int)$a_show_window);"
 		end
@@ -336,8 +354,15 @@ feature {NONE} -- C externals
 
 	c_sp_wait_timeout (a_proc: POINTER; a_timeout_ms: NATURAL_32): INTEGER
 			-- Wait with timeout.
+			--
+			-- BLOCKING. A bounded wait is still a wait: WaitForSingleObject sits
+			-- in the kernel for however much of `a_timeout_ms' the child actually
+			-- takes, and callers pass whole minutes.
+			--
+			-- Safe to mark: `a_proc' is a malloc'd structure this library owns and
+			-- `a_timeout_ms' is a value, so nothing Eiffel-collected is touched.
 		external
-			"C inline use %"simple_process.h%""
+			"C blocking inline use %"simple_process.h%""
 		alias
 			"return sp_wait_timeout((sp_async_process*)$a_proc, (unsigned int)$a_timeout_ms);"
 		end
@@ -360,8 +385,18 @@ feature {NONE} -- C externals
 
 	c_sp_read_output (a_proc: POINTER; a_len: TYPED_POINTER [INTEGER]): POINTER
 			-- Read available output.
+			--
+			-- BLOCKING. Each ReadFile is guarded by PeekNamedPipe, but the loop
+			-- keeps reading for as long as a chatty child keeps writing, and a
+			-- pipe read is a kernel call either way.
+			--
+			-- Safe to mark: `a_len' is the address of a LOCAL INTEGER of the sole
+			-- caller, `read_available_output', which lives in that routine's own C
+			-- stack frame - never the address of an attribute in an object the
+			-- collector may move. `a_proc' is a malloc'd structure this library
+			-- owns, and the returned buffer is malloc'd and read after the return.
 		external
-			"C inline use %"simple_process.h%""
+			"C blocking inline use %"simple_process.h%""
 		alias
 			"return sp_read_output((sp_async_process*)$a_proc, (int*)$a_len);"
 		end
